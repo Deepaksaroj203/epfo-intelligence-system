@@ -97,10 +97,11 @@ class EPFOCopilot:
         }
 
     def _handle_50_percent_allowance(self, query: str) -> Dict[str, Any]:
-        # Extract figures if present
-        nums = [int(n) for n in re.findall(r"\b\d{4,8}\b", query)]
-        basic = nums[0] if len(nums) > 0 else 20000
-        allowances = nums[1] if len(nums) > 1 else 30000
+        # Extract figures if present (strip commas first)
+        clean_q = re.sub(r",", "", query)
+        all_nums = [int(n) for n in re.findall(r"\b\d+\b", clean_q) if int(n) >= 100]
+        basic = all_nums[0] if len(all_nums) > 0 else 20000
+        allowances = all_nums[1] if len(all_nums) > 1 else 30000
         gross = basic + allowances
 
         case = EmployerCaseInput(
@@ -148,9 +149,22 @@ class EPFOCopilot:
         }
 
     def _handle_penalties(self, query: str) -> Dict[str, Any]:
-        nums = [int(n) for n in re.findall(r"\b\d{3,8}\b", query)]
-        arrears = nums[0] if len(nums) > 0 else 100000
-        delay_days = nums[1] if len(nums) > 1 else 60
+        clean_q = re.sub(r",", "", query)
+        all_nums = [int(n) for n in re.findall(r"\b\d+\b", clean_q)]
+
+        arrears = 100000
+        delay_days = 60
+
+        # Discern large principal arrears vs delay days
+        large_nums = [n for n in all_nums if n >= 1000]
+        small_nums = [n for n in all_nums if n < 1000]
+
+        if large_nums:
+            arrears = large_nums[0]
+        if small_nums:
+            delay_days = small_nums[0]
+        elif len(all_nums) > 1 and not small_nums:
+            delay_days = all_nums[1]
 
         case = EmployerCaseInput(
             employee_count=50,

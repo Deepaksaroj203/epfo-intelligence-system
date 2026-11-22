@@ -138,18 +138,40 @@ class EPFOTelegramBot:
             self.send_message(chat_id, "⚠️ Could not reach the EPFO Intelligence Gateway. Ensure `http://127.0.0.1:8000` is running.")
             return
 
-        answer = data.get("answer_markdown", "No answer generated.")
+        raw_answer = data.get("answer_markdown", "No answer generated.")
         
-        # Format citations
+        # Build Structured Perfect Solution Message
+        msg_parts = [raw_answer]
+
+        # 1. Actionable Steps
+        steps = data.get("actionable_steps")
+        if steps and isinstance(steps, list) and len(steps) > 0:
+            msg_parts.append("\n🛠️ *Actionable Resolution Steps:*")
+            for i, step in enumerate(steps, 1):
+                msg_parts.append(f"{i}. {step}")
+
+        # 2. Calculation Summary if present
+        calc = data.get("calculation_summary")
+        if calc and isinstance(calc, dict):
+            msg_parts.append("\n🧮 *Deterministic Engine Math:*")
+            for k, v in calc.items():
+                msg_parts.append(f"• *{k}*: `{v}`")
+
+        # 3. Verified Citations
         citations = data.get("citations", [])
         if citations:
-            answer += "\n\n🔒 *Verified Statutory Citations:*"
+            msg_parts.append("\n🔒 *Statutory Authority & Precedents:*")
             for c in citations[:3]:
-                ref = c.get("ref") or c.get("doc_ref") or "Statutory Order"
+                title = c.get("title") or c.get("ref") or c.get("doc_ref") or "Statutory Order"
                 sha = (c.get("doc_sha256") or "")[:10]
-                answer += f"\n• `{ref}` (SHA: `{sha}...`)"
+                url = c.get("url", "")
+                if sha:
+                    msg_parts.append(f"• *{title}* (SHA: `{sha}...`)")
+                else:
+                    msg_parts.append(f"• *{title}*")
 
-        self.send_message(chat_id, answer)
+        final_msg = "\n".join(msg_parts)
+        self.send_message(chat_id, final_msg)
 
     def handle_pf(self, chat_id: int, args_str: str):
         parts = args_str.strip().split()
