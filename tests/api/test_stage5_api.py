@@ -285,3 +285,147 @@ def test_feedback_flag_endpoint():
     assert data["ticket_id"].startswith("TCK-")
     assert data["status"] == "QUEUED"
     assert data["verification_crawl_queued"] is True
+
+
+# ============================================================================
+# 9. BATCH ECR FILE VALIDATION TESTS (POST /v1/employer/ecr/validate-file)
+# ============================================================================
+
+def test_ecr_file_validation_success():
+    """
+    Validates a well-formed ECR file with compliant 12% EE math and wage caps.
+    """
+    # UAN#~#Name#~#Gross#~#EPF#~#EPS#~#EDLI#~#EE_EPF#~#EPS_Contr#~#ER_EPF_Diff#~#NCP#~#Refund
+    ecr_sample = (
+        "100123456789#~#Amit Kumar#~#20000.00#~#15000.00#~#15000.00#~#15000.00#~#1800.00#~#1250.00#~#550.00#~#0#~#0.00\n"
+        "100987654321#~#Pooja Sharma#~#12000.00#~#12000.00#~#12000.00#~#12000.00#~#1440.00#~#1000.00#~#440.00#~#2#~#0.00\n"
+    )
+    payload = {
+        "wage_month": "2026-03-01",
+        "file_content": ecr_sample,
+    }
+    response = client.post("/v1/employer/ecr/validate-file", json=payload, headers=AUTH_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_records"] == 2
+    assert data["valid_records"] == 2
+    assert data["invalid_records"] == 0
+    assert data["is_valid_for_upload"] is True
+    assert data["total_ee_contribution_paise"] == (180000 + 144000)
+    assert data["total_admin_charges_paise"] >= 50000
+
+
+def test_ecr_file_validation_catches_math_and_ceiling_errors():
+    """
+    Detects math errors, excessive EPS wage capping, and out-of-bounds NCP days.
+    """
+    corrupt_ecr = (
+        # Row 1: EE EPF is ₹1,000 instead of 12% on ₹15,000 (₹1,800) -> EE_CONTRIBUTION_MATH_MISMATCH
+        "100111111111#~#Bad Math#~#15000.00#~#15000.00#~#15000.00#~#15000.00#~#1000.00#~#1250.00#~#550.00#~#0#~#0.00\n"
+        # Row 2: EPS wages ₹20,000 exceeds ₹15,000 statutory ceiling in early 2026
+        "100222222222#~#Ceiling Breach#~#25000.00#~#25000.00#~#20000.00#~#15000.00#~#3000.00#~#1250.00#~#1750.00#~#0#~#0.00\n"
+        # Row 3: NCP days is 45 (> 31) -> NCP_DAYS_OUT_OF_BOUNDS
+        "100333333333#~#Bad NCP#~#10000.00#~#10000.00#~#10000.00#~#10000.00#~#1200.00#~#833.00#~#367.00#~#45#~#0.00\n"
+    )
+    payload = {
+        "wage_month": "2026-03-01",
+        "file_content": corrupt_ecr,
+    }
+    response = client.post("/v1/employer/ecr/validate-file", json=payload, headers=AUTH_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["is_valid_for_upload"] is False
+    assert len(data["errors"]) >= 3
+    error_codes = [e["error_code"] for e in data["errors"]]
+    assert "EE_CONTRIBUTION_MATH_MISMATCH" in error_codes
+    assert "EPS_WAGE_EXCEEDS_STATUTORY_CEILING" in error_codes
+    assert "NCP_DAYS_OUT_OF_BOUNDS" in error_codes
+
+
+# ============================================================================
+# 10. CITATION-LOCKED LEGAL DRAFT TESTS
+# ============================================================================
+
+def test_draft_epfigms_grievance_endpoint():
+    """
+    Verifies that the EPFiGMS drafting endpoint generates a formal petition
+    with speaking order circular citation and SLA references.
+    """
+    payload = {
+        "member_name": "Rajesh Kumar",
+        "uan": "100234567890",
+        "claim_id": "CLM-2026-9921",
+        "form_code": "FORM_19",
+        "rejection_reason": "Employer signature mismatch on bank cheque",
+        "submission_date": "2026-02-01",
+    }
+    response = client.post("/v1/legal/draft/epfigms", json=payload, headers=AUTH_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["document_type"] == "EPFIGMS_GRIEVANCE"
+    assert "Speaking Order" in data["body_markdown"]
+    assert "WSU/10(1)2011/Changes in Software/34138" in data["body_markdown"]
+    assert any("20 Days" in str(c) for c in data["statutory_citations"])
+
+
+def test_draft_cgit_appeal_endpoint():
+    """
+    Verifies that the CGIT Appeal Memo endpoint calculates and incorporates
+    the statutory 25% Section 7O pre-deposit.
+    """
+    payload = {
+        "establishment_name": "ABC Infotech Private Limited",
+        "establishment_code": "DLCPM0012345000",
+        "impugned_order_ref": "7A/DL/2026/8812",
+        "impugned_order_date": "2026-01-15",
+        "assessed_arrears_paise": 20000000,   # ₹2,00,000
+        "interest_7q_paise": 2400000,         # ₹24,000
+        "damages_14b_paise": 5000000,         # ₹50,000
+        "pre_deposit_25_paise": 6850000,      # ₹68,500 (25% of ₹2,74,000)
+        "bench_city": "New Delhi",
+    }
+    response = client.post("/v1/legal/draft/cgit-appeal", json=payload, headers=AUTH_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["document_type"] == "CGIT_APPEAL_7I"
+    assert "SECTION 7-I" in data["body_markdown"]
+    assert "25.00%" in data["body_markdown"]
+    assert "₹68,500.00" in data["body_markdown"]
+    assert len(data["case_precedents"]) > 0
+
+
+# ============================================================================
+# 11. RESILIENT LIVE PROBE CLIENT TESTS
+# ============================================================================
+
+def test_live_probe_client_boundaries_and_304_caching():
+    """
+    Verifies that LiveProbeClient blocks non-.gov.in domains and issues
+    lightweight conditional 304 probes on repeat visits.
+    """
+    from ingest.workers.live_probe_client import ResilientLiveProbeClient
+
+    client_probe = ResilientLiveProbeClient()
+
+    # 1. Non-gov boundary blocked
+    res_blocked = client_probe.probe_url("https://malicious-phishing-epfo.com/fake.pdf")
+    assert res_blocked.status_code == 403
+    assert "Security Violation" in res_blocked.error_message
+
+    # 2. First probe on official domain -> 200 with new content
+    url = "https://epfindia.gov.in/circulars/dummy_notice.pdf"
+    content = b"%PDF-1.4 official circular content"
+    res_1 = client_probe.probe_url(url, mock_content=content)
+    assert res_1.status_code == 200
+    assert res_1.is_modified is True
+    assert len(res_1.content_sha256) == 64
+
+    # 3. Second probe without changes -> 304 Not Modified
+    res_2 = client_probe.probe_url(url, mock_content=content)
+    assert res_2.status_code == 304
+    assert res_2.is_modified is False
+    assert res_2.content_bytes == b""

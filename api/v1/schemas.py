@@ -175,3 +175,71 @@ class FeedbackFlagResponse(BaseModel):
     status: str
     message: str
     verification_crawl_queued: bool
+
+
+# ============================================================================
+# 7. BATCH ECR FILE VALIDATION SCHEMAS
+# ============================================================================
+
+class ECRValidateFileRequest(BaseModel):
+    wage_month: date
+    file_content: str
+
+
+class ECRRowErrorSchema(BaseModel):
+    row_number: int
+    uan: str
+    member_name: str
+    field_name: str
+    error_code: str
+    error_message: str
+    statutory_citation: str
+
+
+class ECRValidateFileResponse(BaseModel):
+    total_records: int
+    valid_records: int
+    invalid_records: int
+    total_epf_wages_paise: int
+    total_ee_contribution_paise: int
+    total_er_eps_paise: int
+    total_er_epf_diff_paise: int
+    total_admin_charges_paise: int
+    errors: List[ECRRowErrorSchema]
+    is_valid_for_upload: bool
+
+
+# ============================================================================
+# 8. CITATION-LOCKED LEGAL DOCUMENT DRAFTS
+# ============================================================================
+
+class EPFiGMSDraftRequest(BaseModel):
+    member_name: str
+    uan: str
+    claim_id: str
+    form_code: str
+    rejection_reason: str
+    submission_date: date
+    regional_office: str = "Regional PF Commissioner"
+
+
+class CGITAppealDraftRequest(BaseModel):
+    establishment_name: str
+    establishment_code: str
+    impugned_order_ref: str
+    impugned_order_date: date
+    assessed_arrears_paise: int
+    interest_7q_paise: int
+    damages_14b_paise: int
+    pre_deposit_25_paise: int
+    bench_city: str = "New Delhi"
+
+
+class LegalDraftResponse(BaseModel):
+    document_type: str
+    title: str
+    recipient: str
+    subject_line: str
+    body_markdown: str
+    statutory_citations: List[Dict[str, Any]]
+    case_precedents: List[Dict[str, Any]]

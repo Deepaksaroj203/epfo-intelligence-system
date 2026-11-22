@@ -18,10 +18,16 @@ from fastapi import APIRouter, Depends, Query, status
 from api.auth import verify_api_key_or_token
 from api.rag_engine import PrecedentsStore, TroubleshootingKB
 from api.v1.schemas import (
+    CGITAppealDraftRequest,
+    ECRRowErrorSchema,
+    ECRValidateFileRequest,
+    ECRValidateFileResponse,
     EmployerEvaluateRequest,
     EmployerEvaluateResponse,
+    EPFiGMSDraftRequest,
     FeedbackFlagRequest,
     FeedbackFlagResponse,
+    LegalDraftResponse,
     MemberEvaluateRequest,
     MemberEvaluateResponse,
     PortalTroubleshootRequest,
@@ -35,11 +41,13 @@ from api.v1.schemas import (
 from db.statutory_store import StatutoryStore, build_seeded_statutory_store
 from engines.common import EmployerCaseInput, EngineGapEvent, MemberCaseInput
 from engines.employer.coverage_clubbing import evaluate_establishment_coverage
+from engines.employer.ecr_batch_validator import ECRBatchValidator
 from engines.employer.ecr_inspection_gate import evaluate_ecr_inspection_gate
 from engines.employer.penalties_appeals import evaluate_penalties_and_appeals
 from engines.employer.wage_contributions import evaluate_wage_contributions
 from engines.member.claims_eligibility import evaluate_claims_eligibility
 from engines.member.grievance_router import evaluate_grievance_route
+from engines.member.legal_drafter import LegalDrafter
 from engines.member.pension_edli import evaluate_pension_and_edli
 from engines.member.portal_preflight import evaluate_portal_preflight
 from ingest.workers.gap_and_inbound import GapAndInboundWorker
@@ -340,4 +348,114 @@ def flag_feedback(
         status="QUEUED",
         message="Feedback logged and queued for autonomous verification crawl.",
         verification_crawl_queued=True,
+    )
+
+
+# ============================================================================
+# 7. POST /v1/employer/ecr/validate-file
+# ============================================================================
+
+@router.post(
+    "/employer/ecr/validate-file",
+    response_model=ECRValidateFileResponse,
+    summary="Validate Batch ECR #~# Text File Before Unified Portal Upload",
+)
+def validate_ecr_file(
+    payload: ECRValidateFileRequest,
+    auth_tenant: dict = Depends(verify_api_key_or_token),
+) -> ECRValidateFileResponse:
+    summary = ECRBatchValidator.validate_ecr_file_content(
+        file_content=payload.file_content,
+        wage_month=payload.wage_month,
+        store=statutory_store,
+    )
+
+    err_schemas = [
+        ECRRowErrorSchema(
+            row_number=e.row_number,
+            uan=e.uan,
+            member_name=e.member_name,
+            field_name=e.field_name,
+            error_code=e.error_code,
+            error_message=e.error_message,
+            statutory_citation=e.statutory_citation,
+        )
+        for e in summary.errors
+    ]
+
+    return ECRValidateFileResponse(
+        total_records=summary.total_records,
+        valid_records=summary.valid_records,
+        invalid_records=summary.invalid_records,
+        total_epf_wages_paise=summary.total_epf_wages_paise,
+        total_ee_contribution_paise=summary.total_ee_contribution_paise,
+        total_er_eps_paise=summary.total_er_eps_paise,
+        total_er_epf_diff_paise=summary.total_er_epf_diff_paise,
+        total_admin_charges_paise=summary.total_admin_charges_paise,
+        errors=err_schemas,
+        is_valid_for_upload=summary.is_valid_for_upload,
+    )
+
+
+# ============================================================================
+# 8. LEGAL DOCUMENT DRAFTING ENDPOINTS
+# ============================================================================
+
+@router.post(
+    "/legal/draft/epfigms",
+    response_model=LegalDraftResponse,
+    summary="Generate Citation-Locked EPFiGMS Grievance Petition",
+)
+def draft_epfigms(
+    payload: EPFiGMSDraftRequest,
+    auth_tenant: dict = Depends(verify_api_key_or_token),
+) -> LegalDraftResponse:
+    doc = LegalDrafter.draft_epfigms_grievance(
+        member_name=payload.member_name,
+        uan=payload.uan,
+        claim_id=payload.claim_id,
+        form_code=payload.form_code,
+        rejection_reason=payload.rejection_reason,
+        submission_date=payload.submission_date,
+        regional_office=payload.regional_office,
+    )
+    return LegalDraftResponse(
+        document_type=doc.document_type,
+        title=doc.title,
+        recipient=doc.recipient,
+        subject_line=doc.subject_line,
+        body_markdown=doc.body_markdown,
+        statutory_citations=doc.statutory_citations,
+        case_precedents=doc.case_precedents,
+    )
+
+
+@router.post(
+    "/legal/draft/cgit-appeal",
+    response_model=LegalDraftResponse,
+    summary="Generate Citation-Locked CGIT Appeal Memo with Section 7O Compliance",
+)
+def draft_cgit_appeal(
+    payload: CGITAppealDraftRequest,
+    auth_tenant: dict = Depends(verify_api_key_or_token),
+) -> LegalDraftResponse:
+    doc = LegalDrafter.draft_cgit_appeal_petition(
+        establishment_name=payload.establishment_name,
+        establishment_code=payload.establishment_code,
+        impugned_order_ref=payload.impugned_order_ref,
+        impugned_order_date=payload.impugned_order_date,
+        assessed_arrears_paise=payload.assessed_arrears_paise,
+        interest_7q_paise=payload.interest_7q_paise,
+        damages_14b_paise=payload.damages_14b_paise,
+        pre_deposit_25_paise=payload.pre_deposit_25_paise,
+        bench_city=payload.bench_city,
+    )
+    return LegalDraftResponse(
+        document_type=doc.document_type,
+        title=doc.title,
+        recipient=doc.recipient,
+        subject_line=doc.subject_line,
+        body_markdown=doc.body_markdown,
+        statutory_citations=doc.statutory_citations,
+        case_precedents=doc.case_precedents,
     )
