@@ -15,10 +15,12 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query, status
 
-from api.auth import verify_api_key_or_token
+from api.auth import verify_api_key_or_token, verify_optional_auth_or_local
 from api.rag_engine import PrecedentsStore, TroubleshootingKB
 from api.v1.schemas import (
     CGITAppealDraftRequest,
+    CopilotChatRequest,
+    CopilotChatResponse,
     ECRRowErrorSchema,
     ECRValidateFileRequest,
     ECRValidateFileResponse,
@@ -37,7 +39,10 @@ from api.v1.schemas import (
     PrecedentsSearchRequest,
     PrecedentsSearchResponse,
     RuleAsOfResponse,
+    SocialDailyBriefingResponse,
 )
+from api.copilot import EPFOCopilot
+from api.social_briefing import SocialBriefingEngine
 from db.statutory_store import StatutoryStore, build_seeded_statutory_store
 from engines.common import EmployerCaseInput, EngineGapEvent, MemberCaseInput
 from engines.employer.coverage_clubbing import evaluate_establishment_coverage
@@ -58,6 +63,7 @@ router = APIRouter(prefix="/v1", tags=["Production Compliance Endpoints"])
 statutory_store: StatutoryStore = build_seeded_statutory_store()
 precedents_store: PrecedentsStore = PrecedentsStore()
 troubleshooting_kb: TroubleshootingKB = TroubleshootingKB()
+copilot: EPFOCopilot = EPFOCopilot(store=statutory_store, precedents=precedents_store, kb=troubleshooting_kb)
 
 
 # ============================================================================
@@ -459,3 +465,39 @@ def draft_cgit_appeal(
         statutory_citations=doc.statutory_citations,
         case_precedents=doc.case_precedents,
     )
+
+
+# ============================================================================
+# 9. COPILOT CHAT & SOCIAL BRIEFING ENDPOINTS
+# ============================================================================
+
+@router.post(
+    "/copilot/chat",
+    response_model=CopilotChatResponse,
+    summary="Ask Anything About EPFO — Conversational AI Copilot",
+)
+def chat_copilot(
+    payload: CopilotChatRequest,
+    auth_tenant: dict = Depends(verify_optional_auth_or_local),
+) -> CopilotChatResponse:
+    ans = copilot.answer_query(payload.query)
+    return CopilotChatResponse(
+        intent=ans.get("intent", "GENERAL_EPFO"),
+        answer_markdown=ans["answer_markdown"],
+        citations=ans.get("citations", []),
+        actionable_steps=ans.get("actionable_steps"),
+        calculation_summary=ans.get("calculation_summary"),
+    )
+
+
+@router.get(
+    "/social/daily-briefing",
+    response_model=SocialDailyBriefingResponse,
+    summary="Fetch Daily Legally Verified Social Content for Twitter, Instagram & LinkedIn",
+)
+def get_daily_social_briefing(
+    target_date: Optional[date] = None,
+    auth_tenant: dict = Depends(verify_optional_auth_or_local),
+) -> SocialDailyBriefingResponse:
+    briefing = SocialBriefingEngine.get_briefing_for_date(target_date)
+    return SocialDailyBriefingResponse(**briefing)

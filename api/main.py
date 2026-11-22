@@ -10,6 +10,8 @@ Combines:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from api.templates.chat_html import CHAT_HTML
 from api.v1.endpoints import router as v1_router
 from api.v1.endpoints import statutory_store
 
@@ -32,6 +34,16 @@ app.add_middleware(
 
 # Mount Versioned Endpoints
 app.include_router(v1_router)
+
+
+@app.get("/", response_class=HTMLResponse, summary="Interactive Web Chat Copilot UI")
+@app.get("/chat", response_class=HTMLResponse, summary="Interactive Web Chat Copilot UI")
+def serve_chat_ui():
+    """
+    Renders the dark-mode interactive EPFO Statutory Copilot chat interface.
+    """
+    return HTMLResponse(content=CHAT_HTML)
+
 
 
 @app.get("/health", summary="System Health & Integrity Gate Check")

@@ -243,3 +243,30 @@ class LegalDraftResponse(BaseModel):
     body_markdown: str
     statutory_citations: List[Dict[str, Any]]
     case_precedents: List[Dict[str, Any]]
+
+
+# ============================================================================
+# 9. COPILOT CHAT & SOCIAL BRIEFING SCHEMAS
+# ============================================================================
+
+class CopilotChatRequest(BaseModel):
+    query: str
+    session_id: Optional[str] = None
+
+
+class CopilotChatResponse(BaseModel):
+    intent: str
+    answer_markdown: str
+    citations: List[Dict[str, Any]] = Field(default_factory=list)
+    actionable_steps: Optional[List[str]] = None
+    calculation_summary: Optional[Dict[str, Any]] = None
+
+
+class SocialDailyBriefingResponse(BaseModel):
+    date: str
+    topic: str
+    headline: str
+    twitter_thread: List[str]
+    instagram_caption: str
+    linkedin_post: str
+    statutory_citations: List[Dict[str, Any]]

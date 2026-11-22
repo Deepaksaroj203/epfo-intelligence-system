@@ -429,3 +429,96 @@ def test_live_probe_client_boundaries_and_304_caching():
     assert res_2.status_code == 304
     assert res_2.is_modified is False
     assert res_2.content_bytes == b""
+
+
+# ============================================================================
+# 12. WEB CHAT COPILOT & SOCIAL BRIEFING INTEGRATION TESTS
+# ============================================================================
+
+def test_chat_ui_endpoints():
+    """
+    Verifies that GET / and GET /chat serve the dark-theme copilot HTML interface.
+    """
+    for endpoint in ["/", "/chat"]:
+        res = client.get(endpoint)
+        assert res.status_code == 200
+        assert "text/html" in res.headers["content-type"]
+        assert "EPFO Statutory Intelligence & Copilot" in res.text
+        assert "Deterministic Engine Breakdown" in res.text
+
+
+def test_copilot_chat_allowance_math_query():
+    """
+    POST /v1/copilot/chat evaluates mathematical queries in integer paise
+    without requiring LLM math or API key headers for public/web callers.
+    """
+    query_payload = {
+        "query": "Calculate EPF wage contribution for basic salary of Rs 45000 and allowances of Rs 15000"
+    }
+    res = client.post("/v1/copilot/chat", json=query_payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["intent"] in ["50_PERCENT_ALLOWANCE", "GENERAL_EPFO"]
+    assert "₹45,000.00" in data["answer_markdown"] or "Basic" in data["answer_markdown"]
+    assert len(data["citations"]) > 0
+
+
+def test_copilot_chat_wage_ceiling_query():
+    """
+    POST /v1/copilot/chat answers wage ceiling queries with verified circulars.
+    """
+    query_payload = {
+        "query": "What is the statutory wage ceiling and 2026 revision?"
+    }
+    res = client.post("/v1/copilot/chat", json=query_payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "₹15,000" in data["answer_markdown"]
+    assert "₹25,000" in data["answer_markdown"]
+    assert any("5109" in c.get("title", "") or "608" in c.get("title", "") for c in data["citations"])
+
+
+def test_copilot_chat_penalties_query():
+    """
+    POST /v1/copilot/chat answers 7Q & 14B penalty queries with 25% Section 7O deposit.
+    """
+    query_payload = {
+        "query": "Calculate Section 7Q interest and Section 14B damages for late ECR arrears of Rs 250000 delayed by 45 days"
+    }
+    res = client.post("/v1/copilot/chat", json=query_payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "Section 7Q" in data["answer_markdown"]
+    assert "12.00%" in data["answer_markdown"]
+    assert "25.00%" in data["answer_markdown"]
+
+
+def test_social_daily_briefing_endpoint():
+    """
+    GET /v1/social/daily-briefing returns verified multi-platform social content.
+    """
+    res = client.get("/v1/social/daily-briefing")
+    assert res.status_code == 200
+    data = res.json()
+    assert "topic" in data
+    assert "twitter_thread" in data
+    assert len(data["twitter_thread"]) >= 3
+    assert "instagram_caption" in data
+    assert len(data["instagram_caption"]) > 50
+    assert "linkedin_post" in data
+    assert len(data["statutory_citations"]) > 0
+
+
+def test_daily_sweep_orchestrator_execution():
+    """
+    Verifies that DailySweepOrchestrator runs the 06:00 -> 06:15 -> 06:30 IST cycle
+    in dry-run mode and confirms cryptographic hash-chain integrity.
+    """
+    from scripts.run_daily_sweep import DailySweepOrchestrator
+
+    orchestrator = DailySweepOrchestrator()
+    summary = orchestrator.execute_full_sweep(dry_run=True)
+    assert summary["hash_chain_valid"] is True
+    assert summary["active_rules_total"] >= 10
+    assert summary["duration_sec"] >= 0
+

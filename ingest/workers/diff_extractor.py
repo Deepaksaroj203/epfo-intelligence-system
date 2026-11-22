@@ -48,7 +48,7 @@ class SandboxedDiffExtractor:
     """
 
     # Statutory ceiling regex patterns: e.g. "Rs. 25,000", "twenty-five thousand rupees", "Rs. 15,000"
-    RE_WAGE_CEILING = re.compile(r"(?:wage\s+ceiling|monthly\s+wage|words)\s*(?:of\s*)?(?:Rs\.?|INR)\s*([\d,]+)", re.IGNORECASE)
+    RE_WAGE_CEILING = re.compile(r"(?:wage\s+ceiling|monthly\s+wage|words)\s*(?:is\s+notified\s+at|is\s+fixed\s+at|of)?\s*(?:Rs\.?|INR)\s*([\d,]+)", re.IGNORECASE)
     # Interest rate patterns: e.g. "12% per annum", "twelve per cent"
     RE_INTEREST_RATE = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*(?:per\s+annum|p\.a\.)", re.IGNORECASE)
     # Effective date patterns: e.g. "with effect from 17th September 2026", "w.e.f. 01.09.2014"
