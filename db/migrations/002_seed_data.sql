@@ -150,6 +150,16 @@ VALUES
         75000, -- Minimum admin charges ₹750/month (or ₹500 depending on unexempted status)
         'https://unifiedportal-emp.epfindia.gov.in',
         'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    ),
+    (
+        'INSPECTION_CHARGES',
+        '1952-03-04',
+        'infinity',
+        'round_nearest_rupee',
+        100,
+        0,
+        'https://unifiedportal-emp.epfindia.gov.in',
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
     )
 ON CONFLICT DO NOTHING;
 

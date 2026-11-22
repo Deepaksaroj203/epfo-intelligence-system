@@ -432,6 +432,7 @@ def build_seeded_statutory_store() -> StatutoryStore:
     store.add_rounding_policy("14B", date(1952, 3, 4), None, "round_nearest_rupee", 100, 0, "https://www.epfindia.gov.in", "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a")
     store.add_rounding_policy("EPS", date(1995, 11, 16), None, "half_up_to_rupee", 100, 0, "https://egazette.gov.in", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
     store.add_rounding_policy("ADMIN_CHARGES", date(1952, 3, 4), None, "round_nearest_rupee", 100, 75000, "https://unifiedportal-emp.epfindia.gov.in", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    store.add_rounding_policy("INSPECTION_CHARGES", date(1952, 3, 4), None, "round_nearest_rupee", 100, 0, "https://unifiedportal-emp.epfindia.gov.in", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 
     # 2. Portal Form Requirements
     store.add_portal_form_requirement(
