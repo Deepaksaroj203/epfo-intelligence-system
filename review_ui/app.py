@@ -120,3 +120,63 @@ class ReviewUIManager:
             }
         else:
             raise ValueError(f"Invalid decision: {decision}. Must be 'APPROVE' or 'REJECT'.")
+
+
+# FastAPI application instance for Review UI container / dashboard
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+
+app = FastAPI(title="EPFO Stage 4 Exception Review Dashboard", docs_url="/docs")
+ui_manager = ReviewUIManager()
+
+
+@app.get("/health")
+def review_health():
+    return {"status": "HEALTHY", "service": "review_ui"}
+
+
+@app.get("/review/queue")
+def get_queue():
+    return ui_manager.get_pending_items()
+
+
+@app.get("/review/{item_id}")
+def get_item(item_id: str):
+    if item_id not in ui_manager.queue:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return ui_manager.queue[item_id]
+
+
+@app.post("/review/{item_id}/decision")
+def make_decision(item_id: str, decision: str, reviewer: str = "compliance_officer", notes: str = ""):
+    return ui_manager.resolve_item(item_id=item_id, decision=decision, reviewer=reviewer, notes=notes)
+
+
+@app.get("/", response_class=HTMLResponse)
+def index_ui():
+    items = ui_manager.get_pending_items()
+    rows = "".join(f"<tr><td>{it.item_id}</td><td>{it.rule_key}</td><td>{', '.join(it.reasons)}</td></tr>" for it in items)
+    return f"""
+    <html>
+      <head>
+        <title>EPFO Exception Review UI</title>
+        <style>
+          body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; background: #0f172a; color: #f8fafc; }}
+          h2 {{ color: #38bdf8; }}
+          table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+          th, td {{ border: 1px solid #334155; padding: 12px; text-align: left; }}
+          th {{ background: #1e293b; color: #94a3b8; }}
+          tr:hover {{ background: #1e293b; }}
+        </style>
+      </head>
+      <body>
+        <h2>EPFO Statutory Intelligence — Stage 4 Exception Review Queue</h2>
+        <p>Pending human escalation items (Threshold: consensus &lt; 0.98, judicial stay, or retroactive diff):</p>
+        <table>
+          <tr><th>Item ID</th><th>Rule Key</th><th>Escalation Reasons</th></tr>
+          {rows or '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">Zero pending exception items. Autonomous consensus operating smoothly.</td></tr>'}
+        </table>
+      </body>
+    </html>
+    """
+
