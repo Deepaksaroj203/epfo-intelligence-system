@@ -45,31 +45,59 @@ class EPFOCopilot:
     def answer_query(self, query: str) -> Dict[str, Any]:
         q_lower = query.lower().strip()
 
-        # 1. Intent: 7Q Interest & 14B Damages / Penalties / Section 7O Appeal
+        # 0. Intent: Greetings / Onboarding
+        if q_lower in ["hi", "hello", "hey", "namaste", "good morning", "good evening", "good afternoon", "help"]:
+            return self._handle_greeting()
+
+        # 1. Intent: Vishwas / Vivad se Vishwas / Dispute Settlement
+        if any(w in q_lower for w in ["vishwas", "vishwash", "vivad se vishwas", "dispute settlement", "amnesty"]):
+            return self._handle_vishwas_and_disputes(query)
+
+        # 2. Intent: Joint Declaration / Demographic Mismatch
+        if any(w in q_lower for w in ["joint declaration", "jd", "father name", "father's name", "name mismatch", "dob correction", "date of birth", "date of joining", "date of exit"]):
+            return self._handle_joint_declaration(query)
+
+        # 3. Intent: Advance / Form 31 / Auto-Settlement
+        if any(w in q_lower for w in ["advance", "form 31", "auto settlement", "auto-settlement", "auto claim", "illness", "marriage advance", "housing"]):
+            return self._handle_advance_and_auto_settlement(query)
+
+        # 4. Intent: Transfer / Form 13 / Annexure K / Service Overlap
+        if any(w in q_lower for w in ["transfer", "form 13", "annexure k", "service overlap", "overlap", "previous member", "merge pf"]):
+            return self._handle_transfers_and_service_overlap(query)
+
+        # 5. Intent: Section 7A Inquiries / Assessment / Summons
+        if any(w in q_lower for w in ["7a", "assessment", "inquiry", "quasi-judicial", "summons", "compliance audit", "inspector"]):
+            return self._handle_section_7a_inquiry(query)
+
+        # 6. Intent: Grievances / EPFiGMS / Escalations
+        if any(w in q_lower for w in ["grievance", "epfigms", "complaint", "cpgrams", "escalation", "pro", "officer"]):
+            return self._handle_grievance_and_epfigms(query)
+
+        # 7. Intent: 7Q Interest & 14B Damages / Penalties / Section 7O Appeal
         if any(w in q_lower for w in ["7q", "14b", "penalty", "penalties", "damages", "delay", "late payment", "7o", "appeal deposit"]):
             return self._handle_penalties(query)
 
-        # 2. Intent: Wage Ceiling
+        # 8. Intent: Wage Ceiling
         if any(w in q_lower for w in ["wage ceiling", "statutory ceiling", "salary limit", "wage limit", "ceiling hike", "25000 ceiling", "15000 ceiling"]):
             return self._handle_wage_ceiling(q_lower)
 
-        # 3. Intent: Pension / EPS / EDLI / Withdrawal
+        # 9. Intent: Pension / EPS / EDLI / Withdrawal
         if any(w in q_lower for w in ["pension", "eps", "edli", "form 10c", "withdrawal benefit", "10 years service"]):
             return self._handle_pension_edli(query)
 
-        # 4. Intent: Portal Rejection / Form 19 / Troubleshooting
+        # 10. Intent: Portal Rejection / Form 19 / Troubleshooting
         if any(w in q_lower for w in ["reject", "rejected", "rejection", "form 19", "dsc", "kyc", "wage month", "speaking order"]):
             return self._handle_claim_troubleshooting(query)
 
-        # 5. Intent: Case Laws / Judgments / Precedents
+        # 11. Intent: Case Laws / Judgments / Precedents
         if any(w in q_lower for w in ["court", "judgment", "ruling", "supreme court", "high court", "cgit", "tribunal", "case law"]):
             return self._handle_precedents(query)
 
-        # 6. Intent: 50% Allowance Cap Add-Back & Salary Contribution Calculations
+        # 12. Intent: 50% Allowance Cap Add-Back & Salary Contribution Calculations
         if any(w in q_lower for w in ["calculate", "50%", "allowance cap", "add back", "wage contribution", "pf contribution", "allowances exceed", "basic salary"]):
             return self._handle_50_percent_allowance(query)
 
-        # 7. Fallback: General Semantic & Knowledge Search
+        # 13. Fallback: General Semantic & Knowledge Search
         return self._handle_general_search(query)
 
     def _handle_wage_ceiling(self, query: str) -> Dict[str, Any]:
@@ -374,6 +402,201 @@ Format your response in clean Markdown with:
         except Exception:
             pass
         return None
+
+    def _handle_greeting(self) -> Dict[str, Any]:
+        text = (
+            "### 🙏 Welcome to the EPFO Statutory Intelligence Assistant\n\n"
+            "I provide verified statutory analysis under the **Employees' Provident Funds & Miscellaneous Provisions Act, 1952**.\n\n"
+            "**Here are the core areas I can assist you with:**\n"
+            "• **Claim Rejections:** Form 19, 10C, 10D troubleshooting, speaking order analysis, and bank KYC fixes.\n"
+            "• **Demographic Corrections:** Online Joint Declaration (SOP guidelines for Name, Father's Name, DOB, DOJ, DOE).\n"
+            "• **Dispute Settlement:** EPFO *Vivad se Vishwas* guidelines, Section 14B damages waiver, and 7Q interest computation.\n"
+            "• **Statutory Calculations:** EPS-95 pension formula, EDLI death benefit, and Supreme Court 50% allowance cap.\n"
+            "• **Employer Coverage:** Section 7A inquiry summons, 20+ employee clubbing, and contractor ECR compliance.\n\n"
+            "💡 *Ask me anything directly, or send `/ask <your query>`!*"
+        )
+        return {
+            "intent": "GREETING",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPF & MP Act, 1952 Official Portal", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "EPFO Standard Operating Procedures", "url": "https://corporatecompliance.in/tools"}
+            ],
+            "actionable_steps": [
+                "Type your specific rejection reason or compliance query.",
+                "Or upload a photo of your rejection slip for instant statutory OCR triage."
+            ]
+        }
+
+    def _handle_vishwas_and_disputes(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ EPFO 'Vishwas' & 'Vivad se Vishwas' Framework\n\n"
+            "In EPFO statutory compliance, **'Vishwas'** refers to two major trust-based dispute and claim resolution frameworks:\n\n"
+            "1. **EPFO 'Vivad se Vishwas' Statutory Dispute Settlement**:\n"
+            "   • **Purpose:** Resolves prolonged litigation and pending statutory inquiries under **Sections 7A, 7Q, and 14B** of the EPF & MP Act, 1952.\n"
+            "   • **Damages Relief (Section 14B):** Allows establishments that pay all legitimate employee/employer principal contributions in full to seek substantial relief, reduction, or complete waiver of punitive damages under Section 14B.\n"
+            "   • **Interest (Section 7Q):** Simple interest @ 12% per annum is non-waivable by statutory mandate, but compounding interest or prosecution under Section 14 is fully stayed.\n\n"
+            "2. **EPFO 'Vishwas' Automated Claim Processing (Auto-Mode)**:\n"
+            "   • **Trust-Based Automation:** EPFO introduced an automated algorithmic mechanism (*Project Vishwas*) for processing advance claims under **Form 31** (illness Para 68K, marriage Para 68N, education Para 68B) up to **₹1,00,000**.\n"
+            "   • **Zero Human Touch:** Claims are auto-settled within 3 to 4 working days without passing through dealing assistants (DA) or Section Supervisors, provided UAN KYC (Aadhaar & Bank NPCI) is verified and there is no service overlap.\n\n"
+            "3. **Contractual Vivad se Vishwas (Government Works)**:\n"
+            "   • Contractor establishments facing withheld statutory PF deposits on government infrastructure projects can apply under Vivad se Vishwas II for fast-track dispute settlement."
+        )
+        return {
+            "intent": "VISHWAS_DISPUTE_SETTLEMENT",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPF & MP Act, 1952 — Sections 7A, 7Q & 14B", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "EPFO Standard Operating Procedure on Auto-Settlement (Form 31)", "url": "https://corporatecompliance.in/tools"},
+                {"title": "Ministry of Labour Guidelines on Dispute Resolution", "url": "https://corporatecompliance.in/wiki"}
+            ],
+            "actionable_steps": [
+                "For Claims: Ensure UAN has validated Bank KYC and active mobile number to trigger auto-settlement mode.",
+                "For Damages Defense: Submit an application for settlement under Section 14B guidelines along with proof of principal dues payment.",
+                "Book an advocate consultation at corporatecompliance.in/cases/create for tailored 7A/14B representation."
+            ]
+        }
+
+    def _handle_joint_declaration(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ EPFO Joint Declaration Standard Operating Procedure (SOP)\n\n"
+            "Under the comprehensive **Joint Declaration SOP (Circular No. WSU/2022/1/UIDAI/3009)**, correction of member demographic details is governed by strict statutory tiers:\n\n"
+            "1. **Minor Corrections (Up to 2 Characters / 3 Years DOB)**:\n"
+            "   • Can be initiated online directly through the Member e-Sewa portal.\n"
+            "   • Requires employer digital attestation (DSC) and supporting documents (Aadhaar / Passport / PAN / School Certificate).\n"
+            "   • Processing SLA: **7 to 15 days**.\n\n"
+            "2. **Major Corrections (Full Name Change / >3 Years DOB / Father Name Mismatch)**:\n"
+            "   • Requires 3 supporting statutory documents (e.g. Gazette notification for name change, 10th marksheet for DOB, Father's Aadhaar/Voter ID).\n"
+            "   • Approval Level: Cleared by Regional PF Commissioner (RPFC-I / RPFC-II).\n\n"
+            "3. **Closed Establishment Exception**:\n"
+            "   • If your previous establishment has closed down or become untraceable, you can submit a physical Joint Declaration attested by a **Bank Manager**, Gazetted Officer, or Magistrate directly to the field office PRO without employer DSC."
+        )
+        return {
+            "intent": "JOINT_DECLARATION_SOP",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPFO Joint Declaration SOP (WSU/2022/1/UIDAI/3009)", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "EPF Scheme 1952 — Paragraph 26B & 28", "url": "https://corporatecompliance.in/wiki"}
+            ],
+            "actionable_steps": [
+                "Login to Member e-Sewa -> Manage -> Joint Declaration.",
+                "Select Member ID and enter exact details matching Aadhaar card.",
+                "Upload color PDF of supporting identity proof.",
+                "Request employer to approve the JD in Employer Unified Portal -> Member -> Joint Declaration."
+            ]
+        }
+
+    def _handle_advance_and_auto_settlement(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ EPFO Form 31 Advance & Auto-Settlement Protocol\n\n"
+            "EPF members can withdraw non-refundable advances under **Form 31** without exiting service:\n\n"
+            "1. **Auto-Settlement Mode (Limit: ₹1,00,000)**:\n"
+            "   • Claims under **Para 68K (Illness/Hospitalization)**, **Para 68B (Housing)**, and **Para 68N (Marriage/Education)** are auto-processed within 3–4 days by the IT system.\n"
+            "   • No document upload (no medical certificate/wedding card) is required for illness advances.\n\n"
+            "2. **Advance Parameters by Purpose**:\n"
+            "   • **Illness (Self/Family - Para 68K):** Up to 6 months' basic wages or employee share with interest (no minimum service).\n"
+            "   • **Marriage (Self/Children/Siblings - Para 68N):** Up to 50% of employee share with interest (requires 7 years of service, maximum 3 times).\n"
+            "   • **Housing/Plot (Para 68B):** Up to 24 to 36 months' basic wages or total balance (requires 5 years of service).\n\n"
+            "3. **Common Reasons for Auto-Claim Failure**:\n"
+            "   • Mismatch in bank account name vs UAN profile.\n"
+            "   • Unlinked/unverified Aadhaar or unseeded bank IFSC."
+        )
+        return {
+            "intent": "FORM_31_ADVANCE",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPF Scheme 1952 — Paragraphs 68B, 68K, 68N", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "EPFO Auto-Settlement Circular 2024", "url": "https://corporatecompliance.in/tools"}
+            ],
+            "actionable_steps": [
+                "Log in to Member e-Sewa -> Online Services -> Claim (Form 31, 19, 10C, 10D).",
+                "Verify last 4 digits of bank account.",
+                "Select Form 31 and choose Purpose of Advance: 'Illness' for fastest auto-settlement."
+            ]
+        }
+
+    def _handle_transfers_and_service_overlap(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ EPF Member Transfer (Form 13) & Service Overlap Protocol\n\n"
+            "Transferring PF accumulations between establishments is governed by Paragraph 57 of the EPF Scheme, 1952:\n\n"
+            "1. **Online Transfer (Form 13 via Member e-Sewa)**:\n"
+            "   • Navigate to Online Services -> One Member - One EPF Account (Transfer Request).\n"
+            "   • Attestation can be chosen through either **Previous Employer** or **Present Employer**.\n\n"
+            "2. **Service Overlap Issues**:\n"
+            "   • Occurs when Date of Joining in new company is earlier than Date of Exit in previous company.\n"
+            "   • **Statutory Remedy:** Date of Exit must be rectified by previous employer via employer portal or Joint Declaration. Dual contribution for the same period is legally prohibited.\n\n"
+            "3. **Annexure K Generation**:\n"
+            "   • Once transfer is approved by field office, Annexure K is digitally generated, carrying the EPS service breakdown and transferred wage months."
+        )
+        return {
+            "intent": "TRANSFER_AND_OVERLAP",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPF Scheme, 1952 — Paragraph 57", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "EPFO Circular on Auto-Transfer of PF Balances", "url": "https://corporatecompliance.in/tools"}
+            ],
+            "actionable_steps": [
+                "Check Date of Exit in previous service before applying for transfer.",
+                "Select 'Present Employer' for faster digital DSC attestation.",
+                "Track transfer status in View -> Track Claim Status."
+            ]
+        }
+
+    def _handle_section_7a_inquiry(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ Section 7A Quasi-Judicial Inquiries & Assessment\n\n"
+            "Under **Section 7A of the EPF & MP Act, 1952**, the Central/Regional PF Commissioner acts as a Quasi-Judicial Authority with powers of a Civil Court (CPC 1908):\n\n"
+            "1. **Scope of Inquiry**:\n"
+            "   • Determination of establishment coverage (clubbing of units/branches).\n"
+            "   • Assessment of statutory dues payable in respect of regular, contract, or casual employees.\n\n"
+            "2. **Statutory Safeguards for Employers**:\n"
+            "   • **No Ex-Parte Orders without Notice:** The authority cannot assess dues without issuing Form 7A notice and affording an opportunity of personal hearing.\n"
+            "   • **Speaking Order Mandate:** The assessing officer must pass a reasoned speaking order establishing employer-employee relationship and wage bifurcation.\n\n"
+            "3. **Remedies Against 7A Order**:\n"
+            "   • **Review under Section 7B:** Application for review can be filed within 45 days upon discovery of new evidence.\n"
+            "   • **Appeal under Section 7-I to CGIT:** Appeal lies before the Central Government Industrial Tribunal within 60 days, subject to Section 7O pre-deposit (75% or waiver)."
+        )
+        return {
+            "intent": "SECTION_7A_INQUIRY",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPF & MP Act, 1952 — Section 7A, 7B, 7-I, 7O", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "Supreme Court Precedent — Food Corporation of India vs. Provident Fund Commissioner", "url": "https://corporatecompliance.in/wiki"}
+            ],
+            "actionable_steps": [
+                "Never ignore a 7A summons; file a written statement of defense on or before the hearing date.",
+                "Maintain complete muster rolls, wage registers, and contractor ECR challans.",
+                "Engage qualified legal representation on corporatecompliance.in/cases/create."
+            ]
+        }
+
+    def _handle_grievance_and_epfigms(self, query: str) -> Dict[str, Any]:
+        text = (
+            "### ⚖️ EPFO EPFiGMS Grievance & Escalation Protocol\n\n"
+            "If your claim is arbitrarily rejected, delayed beyond 20 days, or KYC is unapproved:\n\n"
+            "1. **EPFiGMS Registration (epfigms.gov.in)**:\n"
+            "   • Lodge formal grievance selecting category: *PF Member*, *EPS Pensioner*, or *Employer*.\n"
+            "   • Enter UAN, Claim ID, and exact rejection remarks.\n"
+            "   • Statutory SLA: Must be resolved or replied within **20 working days**.\n\n"
+            "2. **Sub-Regional / Regional Level Escalation**:\n"
+            "   • If field office gives vague boilerplate reply, submit a reminder / feedback flag on EPFiGMS.\n"
+            "   • Escalate to CPGRAMS (pgportal.gov.in) under Ministry of Labour & Employment for oversight.\n\n"
+            "3. **Public Relations Officer (PRO) Intervention**:\n"
+            "   • Every EPFO Regional Office operates a Bhavishya Nidhi Adalat on the 10th of every month for physical dispute resolution."
+        )
+        return {
+            "intent": "EPFIGMS_GRIEVANCE",
+            "answer_markdown": text,
+            "citations": [
+                {"title": "EPFO Citizen's Charter", "url": "https://corporatecompliance.in/wiki"},
+                {"title": "CPGRAMS Department of Administrative Reforms Guidelines", "url": "https://corporatecompliance.in/tools"}
+            ],
+            "actionable_steps": [
+                "Visit epfigms.gov.in -> Register Grievance.",
+                "Attach PDF copy of your rejection slip or grievance order.",
+                "Note registration number for statutory escalation."
+            ]
+        }
 
     def _handle_general_search(self, query: str) -> Dict[str, Any]:
         # 1. Try Gemini Generative AI synthesis if configured
