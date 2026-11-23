@@ -5,7 +5,6 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
-.env
 .venv/
 env/
 venv/
@@ -13,3 +12,5 @@ venv/
 bot/bot_config.json
 logs/
 
+config.bat
+node_modules

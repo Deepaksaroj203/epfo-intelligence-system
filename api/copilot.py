@@ -333,16 +333,32 @@ class EPFOCopilot:
         """
         api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if not api_key:
-            env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-            if os.path.exists(env_file):
-                try:
-                    with open(env_file, "r", encoding="utf-8") as f:
-                        for line in f:
-                            if line.strip().startswith("GEMINI_API_KEY="):
-                                api_key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+            candidate_files = [
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+                r"C:\Users\acer\Documents\GitHub\epfo-intelligence-system\.env",
+                r"C:\Users\acer\Documents\GitHub\epfo-intelligence-system\bot\bot_config.json",
+                r"C:\xampp\htdocs\consultant\.env",
+            ]
+            for ef in candidate_files:
+                if os.path.exists(ef):
+                    try:
+                        if ef.endswith(".json"):
+                            with open(ef, "r", encoding="utf-8") as f:
+                                data = json.load(f)
+                                api_key = data.get("gemini_api_key", "").strip()
+                                if api_key:
+                                    break
+                        else:
+                            with open(ef, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    if line.strip().startswith("GEMINI_API_KEY="):
+                                        api_key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                                        if api_key:
+                                            break
+                            if api_key:
                                 break
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
 
         if not api_key:
             return None
@@ -369,38 +385,44 @@ Format your response in clean Markdown with:
 **Statutory Citations:**
 - Relevant Section / Scheme / Supreme Court ruling.
 """
-        model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash").strip()
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        model_pref = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
+        candidate_models = [model_pref, "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
+        # Deduplicate while preserving order
+        seen = set()
+        models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
+
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
         }
 
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            txt = parts[0].get("text", "").strip()
-                            if txt:
-                                return {
-                                    "intent": "AI_STATUTORY_SYNTHESIS",
-                                    "answer_markdown": txt,
-                                    "citations": [
-                                        {"title": "EPF & MP Act, 1952 & Allied Schemes", "url": "https://corporatecompliance.in/wiki"},
-                                        {"title": "EPFO Standard Operating Procedures", "url": "https://corporatecompliance.in/epfo-error"}
-                                    ],
-                                }
-        except Exception:
-            pass
+        for model in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                txt = parts[0].get("text", "").strip()
+                                if txt:
+                                    return {
+                                        "intent": "AI_STATUTORY_SYNTHESIS",
+                                        "answer_markdown": txt,
+                                        "citations": [
+                                            {"title": "EPF & MP Act, 1952 & Allied Schemes", "url": "https://corporatecompliance.in/wiki"},
+                                            {"title": "EPFO Standard Operating Procedures", "url": "https://corporatecompliance.in/epfo-error"}
+                                        ],
+                                    }
+            except Exception:
+                continue
         return None
 
     def _handle_greeting(self) -> Dict[str, Any]:
