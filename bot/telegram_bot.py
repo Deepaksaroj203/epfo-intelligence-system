@@ -48,10 +48,25 @@ class EPFOTelegramBot:
     """
 
     def __init__(self, token: str, api_url: str):
-        self.token = token
-        self.api_url = api_url
-        self.bot_api_url = f"https://api.telegram.org/bot{token}"
+        self.token = token.strip().replace(" ", "")
+        self.api_url = api_url.rstrip("/")
+        self.bot_api_url = f"https://api.telegram.org/bot{self.token}"
         self.last_update_id = 0
+
+    def register_commands(self):
+        """Registers the bot's official command menu with Telegram."""
+        commands = [
+            {"command": "ask", "description": "Ask any statutory EPFO or compliance question"},
+            {"command": "pf", "description": "Calculate EPF/EPS with SC 50% allowance cap"},
+            {"command": "penalties", "description": "Compute Section 7Q interest & 14B damages"},
+            {"command": "pension", "description": "EPS-95 monthly pension calculation"},
+            {"command": "briefing", "description": "Today's verified legal news & social thread"},
+            {"command": "status", "description": "System health and bitemporal baseline check"},
+            {"command": "help", "description": "Show help guide and commands"},
+        ]
+        res = self.call_api("setMyCommands", {"commands": commands})
+        if res and res.get("ok"):
+            logger.info("Successfully registered bot command menu with Telegram.")
 
     def call_api(self, method: str, payload: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Makes an HTTP POST request to Telegram's Bot API."""
@@ -314,9 +329,36 @@ class EPFOTelegramBot:
             # Treat bare text directly as statutory questions
             self.handle_ask(chat_id, text)
 
+    def clear_webhook(self) -> bool:
+        """Clears any active webhook so getUpdates polling works without 409 Conflict."""
+        res = self.call_api("deleteWebhook")
+        if res and res.get("ok"):
+            logger.info("Cleared active Telegram webhook. Ready for direct polling mode.")
+            return True
+        return False
+
+    def set_webhook(self, url: str) -> bool:
+        """Sets a webhook URL on the Telegram Bot API."""
+        res = self.call_api("setWebhook", {"url": url})
+        if res and res.get("ok"):
+            logger.info(f"Successfully set Telegram webhook to: {url}")
+            return True
+        logger.error(f"Failed to set Telegram webhook: {res}")
+        return False
+
     def run_polling(self):
         """Continuously polls Telegram for new updates."""
-        logger.info(f"Starting Telegram Bot polling daemon for token: {self.token[:8]}...")
+        me = self.call_api("getMe")
+        if me and me.get("ok"):
+            bot_info = me.get("result", {})
+            logger.info(f"Connected to Telegram as @{bot_info.get('username')} ({bot_info.get('first_name')})")
+        else:
+            logger.warning(f"Could not connect to Telegram API with token {self.token[:8]}...")
+
+        # Clear any prior webhook to allow polling
+        self.clear_webhook()
+        self.register_commands()
+        logger.info("Starting Telegram Bot polling daemon. Waiting for user messages...")
         while True:
             try:
                 res = self.call_api("getUpdates", {
