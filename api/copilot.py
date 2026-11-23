@@ -319,6 +319,8 @@ class EPFOCopilot:
         if not api_key:
             return None
 
+        api_key = api_key.replace(" ", "").strip()
+
         prompt = f"""You are the authoritative Principal Compliance Architect for corporatecompliance.in and the EPFO Intelligence System.
 Answer the following statutory compliance question with strict legal accuracy, citing provisions of the EPF & MP Act 1952, EPF Scheme 1952, EPS 1995, EDLI 1976, or Supreme Court / High Court precedents.
 
@@ -350,7 +352,7 @@ Format your response in clean Markdown with:
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 if resp.status == 200:

@@ -177,6 +177,7 @@ class EPFOTelegramBot:
 
         # If Gemini key is available and it's a photo/image, run Gemini Vision!
         if api_key:
+            api_key = api_key.replace(" ", "").strip()
             download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
             try:
                 import base64
@@ -205,7 +206,7 @@ Provide:
                 v_req = urllib.request.Request(
                     v_url,
                     data=json.dumps(v_payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
+                    headers={"Content-Type": "application/json", "x-goog-api-key": api_key}
                 )
                 with urllib.request.urlopen(v_req, timeout=20) as v_resp:
                     if v_resp.status == 200:
