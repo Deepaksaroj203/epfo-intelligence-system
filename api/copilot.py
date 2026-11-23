@@ -8,8 +8,13 @@ returning plain-language legal answers locked to statutory citations.
 """
 
 from datetime import date, datetime
+import json
+import logging
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+import urllib.parse
+import urllib.request
 
 from api.rag_engine import PrecedentsStore, TroubleshootingKB
 from db.statutory_store import StatutoryStore
@@ -293,7 +298,87 @@ class EPFOCopilot:
             }
         return self._handle_general_search(query)
 
+    def _synthesize_with_gemini(self, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Uses Google Gemini AI with statutory system grounding to generate
+        high-fidelity legal analysis for queries not matching static intent templates.
+        """
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+            if os.path.exists(env_file):
+                try:
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if line.strip().startswith("GEMINI_API_KEY="):
+                                api_key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                                break
+                except Exception:
+                    pass
+
+        if not api_key:
+            return None
+
+        prompt = f"""You are the authoritative Principal Compliance Architect for corporatecompliance.in and the EPFO Intelligence System.
+Answer the following statutory compliance question with strict legal accuracy, citing provisions of the EPF & MP Act 1952, EPF Scheme 1952, EPS 1995, EDLI 1976, or Supreme Court / High Court precedents.
+
+User Question: "{query}"
+
+Format your response in clean Markdown with:
+### ⚖️ Statutory Legal Position
+(Clear statutory analysis with exact paragraph/section numbers)
+
+**Root Cause & Operational Reality:**
+(Explanation of portal mechanics, employer responsibilities, or KYC validation)
+
+**Actionable Step-by-Step Resolution:**
+1. Step one
+2. Step two
+3. Step three
+
+**Statutory Citations:**
+- Relevant Section / Scheme / Supreme Court ruling.
+"""
+        model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash").strip()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
+        }
+
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            txt = parts[0].get("text", "").strip()
+                            if txt:
+                                return {
+                                    "intent": "AI_STATUTORY_SYNTHESIS",
+                                    "answer_markdown": txt,
+                                    "citations": [
+                                        {"title": "EPF & MP Act, 1952 & Allied Schemes", "url": "https://corporatecompliance.in/wiki"},
+                                        {"title": "EPFO Standard Operating Procedures", "url": "https://corporatecompliance.in/epfo-error"}
+                                    ],
+                                }
+        except Exception:
+            pass
+        return None
+
     def _handle_general_search(self, query: str) -> Dict[str, Any]:
+        # 1. Try Gemini Generative AI synthesis if configured
+        ai_res = self._synthesize_with_gemini(query)
+        if ai_res:
+            return ai_res
+
         envelope = self.store.get_rule_as_of("statutory_wage_ceiling", {}, date.today())
         text = (
             f"### EPFO Statutory Compliance Intelligence\n\n"

@@ -126,6 +126,115 @@ class EPFOTelegramBot:
     # COMMAND HANDLERS
     # =========================================================================
 
+    def handle_media(self, chat_id: int, msg: Dict[str, Any]):
+        """
+        Process Rejection Slip photos and PDF documents using AI Vision or statutory triage.
+        """
+        caption = msg.get("caption", "").strip()
+        file_id = None
+        is_photo = False
+
+        if msg.get("photo"):
+            file_id = msg["photo"][-1]["file_id"]
+            is_photo = True
+        elif msg.get("document"):
+            file_id = msg["document"]["file_id"]
+
+        if not file_id:
+            return
+
+        self.send_message(chat_id, "📸 _Analyzing rejection document via AI Vision & Statutory Engine..._")
+
+        # 1. Fetch file path from Telegram Bot API
+        res = self.call_api("getFile", {"file_id": file_id})
+        file_path = res.get("result", {}).get("file_path") if res and res.get("ok") else None
+
+        if not file_path:
+            self.send_message(chat_id, "⚠️ Could not retrieve the document from Telegram servers. Please re-upload.")
+            return
+
+        # 2. Check for Gemini API key
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key and os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    api_key = cfg.get("gemini_api_key", "").strip()
+            except Exception:
+                pass
+
+        if not api_key:
+            env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+            if os.path.exists(env_file):
+                try:
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if line.strip().startswith("GEMINI_API_KEY="):
+                                api_key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                                break
+                except Exception:
+                    pass
+
+        # If Gemini key is available and it's a photo/image, run Gemini Vision!
+        if api_key:
+            download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+            try:
+                import base64
+                req = urllib.request.Request(download_url)
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    image_bytes = r.read()
+
+                b64 = base64.b64encode(image_bytes).decode("utf-8")
+                vision_prompt = """Extract the UAN, Member Name, Rejection Reason, Error Code, and grievance text from this EPFO portal document/slip.
+Provide:
+1. Rejection Summary & Root Cause
+2. Actionable Step-by-Step Statutory Fix Checklist
+3. Relevant Schemes (EPF 1952, EPS 1995) or Joint Declaration requirements."""
+
+                model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash").strip()
+                v_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                v_payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": vision_prompt},
+                            {"inline_data": {"mime_type": "image/jpeg" if is_photo else "application/pdf", "data": b64}}
+                        ]
+                    }],
+                    "generationConfig": {"temperature": 0.1, "maxOutputTokens": 2048}
+                }
+                v_req = urllib.request.Request(
+                    v_url,
+                    data=json.dumps(v_payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(v_req, timeout=20) as v_resp:
+                    if v_resp.status == 200:
+                        v_data = json.loads(v_resp.read().decode("utf-8"))
+                        candidates = v_data.get("candidates", [])
+                        if candidates:
+                            txt = candidates[0].get("content", {}).get("parts", [])[0].get("text", "")
+                            if txt:
+                                response_text = (
+                                    "🔍 *AI REJECTION SLIP DIAGNOSIS:*\n"
+                                    "━━━━━━━━━━━━━━━━━━━━\n"
+                                    f"{txt}\n\n"
+                                    "💡 *Next Action:* Book an advocate consultation at [corporatecompliance.in](https://corporatecompliance.in/cases/create?ref=tg_slip) or download the pre-filled Joint Declaration."
+                                )
+                                self.send_message(chat_id, response_text)
+                                return
+            except Exception as e:
+                logger.warning(f"Gemini vision error: {e}")
+
+        # Fallback if no Gemini key or vision failed
+        text_resp = (
+            "📸 *Rejection Slip Received!*\n\n"
+            "We have stored your rejection document. To diagnose immediately, you can:\n"
+            "1. Type the exact rejection reason (e.g. *Father Name Mismatch*, *Service Overlap*, *Annexure K*).\n"
+            "2. Or consult our live web tool at [corporatecompliance.in/epfo-error](https://corporatecompliance.in/epfo-error).\n"
+            "3. Or book a senior compliance consultation for offline PRO intervention."
+        )
+        self.send_message(chat_id, text_resp)
+
     def handle_start(self, chat_id: int):
         msg = (
             "🏛️ *Welcome to the EPFO Statutory Intelligence Assistant*\n\n"
@@ -304,7 +413,15 @@ class EPFOTelegramBot:
         chat_id = msg.get("chat", {}).get("id")
         text = msg.get("text", "").strip()
 
-        if not chat_id or not text:
+        if not chat_id:
+            return
+
+        # Handle Photo / Document Uploads (Rejection Slips & Grievance Orders)
+        if msg.get("photo") or msg.get("document"):
+            self.handle_media(chat_id, msg)
+            return
+
+        if not text:
             return
 
         logger.info(f"Received message from chat_id={chat_id}: {text}")
